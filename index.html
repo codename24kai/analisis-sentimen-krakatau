@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentimen Anak Krakatau - Interaktif</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        /* Prinsip Monokrom 60-30-10 */
+                        'mono-60': '#FAFAFA', /* 60% Background dominan (Putih Pudar) */
+                        'mono-30': '#E5E7EB', /* 30% Garis, Card, Elemen Sekunder (Abu-abu) */
+                        'mono-10': '#111827', /* 10% Teks utama, Tombol (Hitam/Abu Gelap) */
+                        
+                        /* Warna indikator sentimen (Tetap butuh warna agar chart mudah dibaca) */
+                        'sent-pos': '#4ade80', /* Hijau */
+                        'sent-neu': '#9ca3af', /* Abu-abu */
+                        'sent-neg': '#f87171', /* Merah */
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FAFAFA;
+            color: #111827;
+        }
+        
+        /* Custom scrollbar untuk tampilan lebih bersih */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+        
+        /* Efek interaktif pada card */
+        .interactive-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .interactive-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 25px -5px rgba(0, 0, 0, 0.08);
+            border-color: #D1D5DB;
+        }
+
+        /* Animasi fade in */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+
+<body class="antialiased min-h-screen flex flex-col selection:bg-mono-10 selection:text-white">
+
+    <nav class="bg-white/80 backdrop-blur-md border-b border-mono-30 sticky top-0 z-50 transition-all">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3 cursor-pointer group p-2 rounded-lg" onclick="window.scrollTo(0,0)">
+                    <div class="w-8 h-8 rounded-full bg-mono-10 flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-volcano text-sm"></i>
+                    </div>
+                    <span class="font-bold text-lg tracking-tight group-hover:text-gray-600 transition-colors">Krakatau.io</span>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="#dashboard" class="text-mono-10 border-b-2 border-mono-10 px-1 py-5 text-sm font-medium">Dashboard</a>
+                    <a href="#integrasi" class="text-gray-400 hover:text-mono-10 transition-colors px-1 py-5 text-sm font-medium">Data & API</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full" id="dashboard">
+        
+        <div class="mb-10 animate-fade-in">
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">Sentimen Publik: Anak Krakatau</h1>
+            <p class="text-gray-500 max-w-3xl text-sm sm:text-base leading-relaxed">
+                Platform analisis teks interaktif untuk memetakan opini publik dari komentar Instagram. Unggah data scraping Anda (HTML/JSON) atau tarik langsung via API Apify untuk melihat visualisasi data secara real-time.
+            </p>
+        </div>
+
+        <!-- Kartu Statistik Utama -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white p-6 rounded-2xl border border-mono-30 interactive-card">
+                <div class="flex justify-between items-start mb-2">
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Komentar</p>
+                    <div class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center"><i class="fa-solid fa-database text-gray-400 text-xs"></i></div>
+                </div>
+                <p class="text-4xl font-black text-mono-10" id="total-comments">0</p>
+            </div>
+            
+            <div class="bg-white p-6 rounded-2xl border border-mono-30 interactive-card relative overflow-hidden group">
+                <div class="absolute bottom-0 left-0 w-full h-1 bg-sent-pos group-hover:h-2 transition-all"></div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Positif</p>
+                <div class="flex items-baseline gap-2">
+                    <p class="text-4xl font-black text-mono-10" id="pos-count">0</p>
+                    <span class="text-sm font-bold text-sent-pos bg-green-50 px-2 py-0.5 rounded-full" id="pos-percent">0%</span>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-2xl border border-mono-30 interactive-card relative overflow-hidden group">
+                <div class="absolute bottom-0 left-0 w-full h-1 bg-sent-neu group-hover:h-2 transition-all"></div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Netral</p>
+                <div class="flex items-baseline gap-2">
+                    <p class="text-4xl font-black text-mono-10" id="neu-count">0</p>
+                    <span class="text-sm font-bold text-sent-neu bg-gray-100 px-2 py-0.5 rounded-full" id="neu-percent">0%</span>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-2xl border border-mono-30 interactive-card relative overflow-hidden group">
+                <div class="absolute bottom-0 left-0 w-full h-1 bg-sent-neg group-hover:h-2 transition-all"></div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Negatif</p>
+                <div class="flex items-baseline gap-2">
+                    <p class="text-4xl font-black text-mono-10" id="neg-count">0</p>
+                    <span class="text-sm font-bold text-sent-neg bg-red-50 px-2 py-0.5 rounded-full" id="neg-percent">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
+            <!-- Doughnut Chart Area -->
+            <div class="bg-white p-6 rounded-2xl border border-mono-30 interactive-card lg:col-span-1 flex flex-col">
+                <h2 class="text-base font-bold mb-6 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-gray-400"></i> Proporsi Sentimen
+                </h2>
+                <div class="flex-grow flex items-center justify-center min-h-[260px] relative">
+                    <canvas id="sentimentDoughnut"></canvas>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-4">
+                        <span class="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Dominan</span>
+                        <span class="text-2xl font-black text-mono-10 transition-colors" id="majority-sentiment">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bar Chart Area -->
+            <div class="bg-white p-6 rounded-2xl border border-mono-30 interactive-card lg:col-span-2 flex flex-col">
+                <h2 class="text-base font-bold mb-6 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-column text-gray-400"></i> Tren Sentimen Harian
+                </h2>
+                <div class="flex-grow w-full h-[260px]">
+                    <canvas id="sentimentTrend"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 mb-6 mt-16" id="integrasi">
+            <div class="w-2 h-8 bg-mono-10 rounded-full"></div>
+            <h2 class="text-2xl font-bold">Panel Integrasi Data</h2>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            
+            <!-- Card 1: Upload File Lokal -->
+            <div class="bg-white p-6 rounded-2xl border border-mono-30 interactive-card flex flex-col relative overflow-hidden group">
+                <div class="flex gap-4 mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-mono-10 flex-shrink-0 group-hover:bg-mono-10 group-hover:text-white transition-colors">
+                        <i class="fa-solid fa-file-code text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg">Upload Data Lokal</h3>
+                        <p class="text-sm text-gray-500 mt-1">Unggah file hasil scraping Apify format <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-mono-10 font-mono">.html</code> atau <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-mono-10 font-mono">.json</code>.</p>
+                    </div>
+                </div>
+                
+                <div class="mt-auto pt-4">
+                    <label class="flex flex-col items-center justify-center w-full h-28 border-2 border-mono-30 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition-all group/dropzone relative overflow-hidden">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6 z-10">
+                            <i class="fa-solid fa-cloud-arrow-up text-2xl text-gray-400 mb-2 group-hover/dropzone:text-mono-10 transition-colors"></i>
+                            <p class="text-sm text-gray-500 font-medium">Klik atau seret file ke sini</p>
+                        </div>
+                        <input type="file" id="file-upload" accept=".json,.html" class="hidden" />
+                    </label>
+                    <!-- Notifikasi Upload -->
+                    <div id="upload-status" class="mt-3 text-sm hidden font-medium px-4 py-2.5 rounded-lg text-center flex items-center justify-center gap-2 transition-all"></div>
+                </div>
+            </div>
+
+            <!-- Card 2: API Apify -->
+            <div class="bg-mono-10 p-6 rounded-2xl border border-mono-10 interactive-card flex flex-col text-white relative overflow-hidden group">
+                <!-- Visual ornamen -->
+                <i class="fa-solid fa-plug absolute -right-6 -bottom-6 text-8xl text-white opacity-[0.03] group-hover:scale-110 transition-transform duration-500"></i>
+                
+                <div class="flex gap-4 mb-4 z-10">
+                    <div class="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-white flex-shrink-0 border border-white/20 group-hover:bg-white group-hover:text-mono-10 transition-colors">
+                        <i class="fa-solid fa-link text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg">Live API Fetch (Apify)</h3>
+                        <p class="text-sm text-gray-400 mt-1">Tarik dataset publik Apify secara langsung menggunakan <span class="text-white font-medium">Dataset ID</span>.</p>
+                    </div>
+                </div>
+                
+                <div class="mt-auto pt-4 z-10">
+                    <div class="flex gap-2 relative">
+                        <input type="text" id="apify-dataset-id" placeholder="Masukkan Dataset ID (Contoh: xK3mY7z...)" class="flex-grow px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white/10 transition-all font-mono">
+                        <button id="btn-fetch-apify" class="bg-white text-mono-10 px-6 py-3 rounded-xl text-sm font-bold hover:bg-gray-200 hover:shadow-lg transition-all flex items-center justify-center whitespace-nowrap min-w-[120px] active:scale-95">
+                            <i class="fa-solid fa-bolt text-yellow-500 mr-2"></i> Tarik Data
+                        </button>
+                    </div>
+                    <!-- Notifikasi API -->
+                    <div id="apify-status" class="mt-3 text-sm hidden font-medium px-4 py-2.5 bg-white/10 rounded-lg text-center backdrop-blur-sm border border-white/10 flex items-center justify-center gap-2 transition-all"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-mono-30 shadow-sm overflow-hidden mb-10 transition-all hover:shadow-md">
+            <div class="px-6 py-5 border-b border-mono-30 flex justify-between items-center bg-gray-50/50">
+                <div>
+                    <h2 class="text-lg font-bold">Log Komentar Instagram</h2>
+                    <p class="text-xs text-gray-500 mt-1">Menampilkan cuplikan data hasil scraping dan prediksi sentimen.</p>
+                </div>
+                <div class="text-sm font-medium bg-white px-3 py-1.5 rounded-full border border-mono-30 shadow-sm flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    Total: <span id="total-table-items" class="font-bold">0</span> Baris
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-mono-30">
+                    <thead class="bg-gray-50/50">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest w-1/4">Pengguna & Waktu</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest w-2/4">Teks Komentar</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest w-1/4">Sentimen NLP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comments-table-body" class="bg-white divide-y divide-gray-100">
+                        <!-- Data Tabel akan disisipkan di sini oleh JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t border-mono-30 py-8 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity cursor-default">
+                <div class="w-6 h-6 rounded bg-mono-10 flex items-center justify-center text-white">
+                    <i class="fa-solid fa-volcano text-[10px]"></i>
+                </div>
+                <span class="text-sm font-bold text-mono-10 tracking-tight">Krakatau.io</span>
+            </div>
+            <p class="text-xs text-gray-400 font-medium">
+                Sistem Analisis Sentimen • Desain Monokrom 60-30-10 • Interaktif & Dinamis
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // Konfigurasi visual default untuk Chart.js (Clean, Minimalist, Monokrom)
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.color = '#9CA3AF'; // text-gray-400
+            Chart.defaults.scale.grid.color = '#F3F4F6'; // text-gray-100
+            Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(17, 24, 39, 0.9)'; // mono-10 dengan opacity
+            Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: 'bold', family: "'Inter', sans-serif" };
+            Chart.defaults.plugins.tooltip.bodyFont = { size: 12, family: "'Inter', sans-serif" };
+            Chart.defaults.plugins.tooltip.padding = 12;
+            Chart.defaults.plugins.tooltip.cornerRadius = 8;
+            Chart.defaults.plugins.tooltip.displayColors = true;
+            
+            let doughnutChart = null;
+            let trendChart = null;
+
+            // Mapping Warna Sentimen
+            const sentimentColors = {
+                'Positif': '#4ade80',
+                'Netral': '#9ca3af',
+                'Negatif': '#f87171'
+            };
+
+            // Data Dummy interaktif agar dashboard tidak kosong saat pertama dibuka
+            const initialMockData = [
+                { ownerUsername: "vulkanologi_id", text: "Terpantau letusan abu vulkanik mengarah ke barat daya. Tetap waspada kawan-kawan pesisir.", timestamp: "2023-11-28T08:30:00Z" },
+                { ownerUsername: "warga_banten", text: "Suara dentumannya kedengaran jelas banget sampai rumah. Agak takut sih jujur 😭", timestamp: "2023-11-28T09:15:00Z" },
+                { ownerUsername: "wisata_pantai", text: "Semoga aman-aman saja, doa terbaik untuk keselamatan bersama.", timestamp: "2023-11-28T10:05:00Z" },
+                { ownerUsername: "budi_travel", text: "Fenomena alam yang luar biasa tapi ngeri kalau terlalu dekat.", timestamp: "2023-11-29T14:20:00Z" },
+                { ownerUsername: "info_cuaca", text: "Angin membawa debu vulkanik. Gunakan masker jika keluar rumah.", timestamp: "2023-11-29T16:45:00Z" },
+                { ownerUsername: "panik_mode", text: "Bahaya banget ini, harus evakuasi gak sih? Kecolongan lagi kaya 2018 ngeri banget.", timestamp: "2023-11-30T07:10:00Z" },
+                { ownerUsername: "geo_student", text: "Aktivitas pembentukan tubuh gunung berapi, fase strombolian yang wajar secara geologis.", timestamp: "2023-11-30T11:30:00Z" }
+            ];
+
+            
+            // NLP Sederhana berbasis Rule (Dictionary-based)
+            // Digunakan JIKA dataset asli belum memiliki field/label sentimen
+            function analyzeSentimentSim(text) {
+                if (!text) return 'Netral';
+                const str = String(text).toLowerCase();
+                
+                // Kamus kata sederhana
+                const negWords = ['takut', 'ngeri', 'panik', 'merinding', 'jangan', 'kecolongan', '😭', 'bahaya', 'was-was', 'sedih', 'korban', 'bencana', 'waspada'];
+                const posWords = ['aman', 'doa', 'terbaik', 'melindungi', 'normal', 'standby', 'siaga', 'indah', 'selamat', 'wajar', 'semoga'];
+                
+                let score = 0;
+                negWords.forEach(w => { if(str.includes(w)) score -= 1; });
+                posWords.forEach(w => { if(str.includes(w)) score += 1; });
+                
+                if (score > 0) return 'Positif';
+                if (score < 0) return 'Negatif';
+                return 'Netral'; 
+            }
+
+            // Fungsi ekstrak data dari file HTML apify
+            // Apify biasanya merender data dalam bentuk HTML Table <table><tr><td>...
+            function parseHTMLData(htmlString) {
+                try {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlString, 'text/html');
+                    const rows = doc.querySelectorAll('table tr');
+                    const result = [];
+                    let headers = [];
+                    
+                    rows.forEach((row, idx) => {
+                        if (idx === 0) {
+                           // Baris pertama adalah Header
+                           row.querySelectorAll('th, td').forEach(cell => headers.push(cell.innerText.trim().toLowerCase()));
+                        } else {
+                           // Baris selanjutnya adalah Data
+                           const cells = row.querySelectorAll('td');
+                           let obj = {};
+                           cells.forEach((cell, i) => { if(headers[i]) obj[headers[i]] = cell.innerText.trim(); });
+                           
+                           // Deteksi cerdas nama kolom Apify (ownerUsername, text, timestamp)
+                           const userCol = headers.find(h => h.includes('user') || h.includes('owner')) || headers[0];
+                           const textCol = headers.find(h => h.includes('text') || h.includes('comment') || h.includes('caption')) || headers[1];
+                           const timeCol = headers.find(h => h.includes('time') || h.includes('date') || h.includes('stamp')) || headers[2];
+
+                           if (obj[textCol] || obj[userCol]) {
+                               result.push({
+                                   ownerUsername: obj[userCol] || 'Anonymous',
+                                   text: obj[textCol] || '',
+                                   timestamp: obj[timeCol] || new Date().toISOString(),
+                                   sentiment: obj['sentiment'] || obj['sentimen'] || null // jika ada bawaan
+                               });
+                           }
+                        }
+                    });
+                    return result;
+                } catch (e) {
+                    console.error("HTML Parsing Error:", e);
+                    return [];
+                }
+            }
+
+            
+            // Fungsi Utama untuk merender semua grafik dan tabel
+            function renderDashboard(rawData) {
+                if (!rawData || !rawData.length) {
+                    alert("Data kosong atau format tidak sesuai.");
+                    return;
+                }
+
+                // 1. Data Cleaning & Sentimen Prediction
+                const processed = rawData.map(item => {
+                    const txt = item.text || item.comment || '';
+                    const ts = item.timestamp || item.date || new Date().toISOString();
+                    
+                    let dateObj = new Date(ts);
+                    if (isNaN(dateObj)) dateObj = new Date(); // Fallback jika format tanggal aneh
+
+                    return {
+                        username: item.ownerUsername || item.username || 'user',
+                        text: txt,
+                        sentiment: item.sentiment ? item.sentiment : analyzeSentimentSim(txt),
+                        dateDisplay: dateObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}),
+                        dateGroup: dateObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short'})
+                    };
+                });
+
+                // 2. Kalkulasi Statistik
+                const total = processed.length;
+                const counts = { 'Positif': 0, 'Netral': 0, 'Negatif': 0 };
+                
+                processed.forEach(item => {
+                    const s = item.sentiment.charAt(0).toUpperCase() + item.sentiment.slice(1).toLowerCase();
+                    if(counts[s] !== undefined) counts[s]++;
+                    else counts['Netral']++; 
+                });
+
+                // Update UI Counter dengan animasi sederhana (mengganti innerText)
+                document.getElementById('total-comments').innerText = total;
+                document.getElementById('total-table-items').innerText = total;
+                
+                const idMap = { 'Positif': 'pos', 'Netral': 'neu', 'Negatif': 'neg' };
+                ['Positif', 'Netral', 'Negatif'].forEach(s => {
+                    const pct = total > 0 ? Math.round((counts[s] / total) * 100) : 0;
+                    const id = idMap[s];
+                    document.getElementById(`${id}-count`).innerText = counts[s];
+                    document.getElementById(`${id}-percent`).innerText = `${pct}%`;
+                });
+
+                // Tentukan Sentimen Mayoritas untuk ditampilkan di tengah Doughnut Chart
+                let maj = 'Netral';
+                if(counts['Positif'] > counts['Netral'] && counts['Positif'] >= counts['Negatif']) maj = 'Positif';
+                if(counts['Negatif'] > counts['Netral'] && counts['Negatif'] >= counts['Positif']) maj = 'Negatif';
+                const elMaj = document.getElementById('majority-sentiment');
+                elMaj.innerText = maj;
+                elMaj.style.color = sentimentColors[maj];
+
+                // 3. Render Doughnut Chart (Proporsi Sentimen)
+                const ctxD = document.getElementById('sentimentDoughnut').getContext('2d');
+                if (doughnutChart) doughnutChart.destroy();
+                doughnutChart = new Chart(ctxD, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Positif', 'Netral', 'Negatif'],
+                        datasets: [{
+                            data: [counts['Positif'], counts['Netral'], counts['Negatif']],
+                            backgroundColor: [sentimentColors['Positif'], sentimentColors['Netral'], sentimentColors['Negatif']],
+                            borderWidth: 0,
+                            hoverOffset: 10 // Efek pop-out saat dihover
+                        }]
+                    },
+                    options: {
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        cutout: '80%', // Membuat cincin tipis (modern)
+                        plugins: { 
+                            legend: { 
+                                position: 'bottom', 
+                                labels: { usePointStyle: true, padding: 20, font: {weight: '600'} } 
+                            } 
+                        },
+                        animation: { animateScale: true, animateRotate: true }
+                    }
+                });
+
+                // 4. Render Bar Chart (Tren Harian)
+                const trendMap = {};
+                // Mengelompokkan data berdasarkan tanggal
+                processed.forEach(item => {
+                    if(!trendMap[item.dateGroup]) trendMap[item.dateGroup] = { 'Positif':0, 'Netral':0, 'Negatif':0 };
+                    const s = item.sentiment.charAt(0).toUpperCase() + item.sentiment.slice(1).toLowerCase();
+                    if(trendMap[item.dateGroup][s] !== undefined) trendMap[item.dateGroup][s]++;
+                });
+
+                // Urutkan label tanggal
+                const labels = Object.keys(trendMap).sort((a, b) => new Date(a) - new Date(b));
+                
+                const ctxT = document.getElementById('sentimentTrend').getContext('2d');
+                if (trendChart) trendChart.destroy();
+                trendChart = new Chart(ctxT, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            { label: 'Negatif', data: labels.map(l => trendMap[l]['Negatif']), backgroundColor: sentimentColors['Negatif'], borderRadius: 6, maxBarThickness: 40 },
+                            { label: 'Netral', data: labels.map(l => trendMap[l]['Netral']), backgroundColor: sentimentColors['Netral'], borderRadius: 6, maxBarThickness: 40 },
+                            { label: 'Positif', data: labels.map(l => trendMap[l]['Positif']), backgroundColor: sentimentColors['Positif'], borderRadius: 6, maxBarThickness: 40 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false }, // Hover memunculkan semua sentimen di tanggal tsb
+                        scales: {
+                            x: { stacked: true, grid: { display: false } }, // Stacked agar rapi
+                            y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { borderDash: [4, 4] }, ticks: { stepSize: Math.ceil(total/10) || 1 } }
+                        },
+                        plugins: { legend: { display: false } }, // Sembunyikan legend bar chart agar clean
+                        animation: { duration: 1000, easing: 'easeOutQuart' }
+                    }
+                });
+
+                // 5. Render Tabel Data Log
+                const tbody = document.getElementById('comments-table-body');
+                tbody.innerHTML = ''; 
+                
+                // Batasi max 50 baris di tabel agar browser tidak lag jika datanya ribuan
+                const displayData = processed.slice(0, 50); 
+
+                displayData.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50/80 transition-colors group cursor-default";
+                    
+                    const sNorm = item.sentiment.charAt(0).toUpperCase() + item.sentiment.slice(1).toLowerCase();
+                    
+                    let badgeColor = 'bg-gray-100 text-gray-700';
+                    let icon = 'fa-minus';
+                    if (sNorm === 'Positif') { badgeColor = 'bg-green-100 text-green-700'; icon = 'fa-plus'; }
+                    if (sNorm === 'Negatif') { badgeColor = 'bg-red-100 text-red-700'; icon = 'fa-exclamation'; }
+
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap align-top">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-mono-10 font-bold text-xs group-hover:bg-mono-10 group-hover:text-white transition-colors shadow-sm">
+                                    ${item.username.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold text-mono-10">@${item.username}</div>
+                                    <div class="text-[10px] font-medium text-gray-400 uppercase mt-0.5">${item.dateDisplay}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 align-top">
+                            <p class="text-sm text-gray-700 leading-relaxed max-w-xl break-words">${item.text}</p>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap align-top">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${badgeColor} shadow-sm group-hover:shadow transition-shadow">
+                                <i class="fa-solid ${icon} text-[10px]"></i> ${sNorm}
+                            </span>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            
+            // Fungsi UI Feedback / Notifikasi Status
+            function showStatus(elId, msg, type = 'success', icon = '') {
+                const el = document.getElementById(elId);
+                let iconHTML = '';
+                
+                // Reset styling kelas
+                el.className = 'mt-3 text-sm font-medium px-4 py-2.5 rounded-lg text-center flex items-center justify-center gap-2 transition-all';
+                
+                if(type === 'success') { 
+                    el.classList.add('bg-green-100', 'text-green-700'); 
+                    iconHTML = '<i class="fa-solid fa-circle-check"></i>';
+                } else if(type === 'error') { 
+                    el.classList.add('bg-red-100', 'text-red-700'); 
+                    iconHTML = '<i class="fa-solid fa-circle-exclamation"></i>';
+                } else if(type === 'loading') { 
+                    el.classList.add('bg-blue-100', 'text-blue-700'); 
+                    iconHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+                } else if(type === 'api-success') { 
+                    el.classList.add('bg-green-500/20', 'text-green-300', 'border', 'border-green-500/30'); 
+                    iconHTML = '<i class="fa-solid fa-circle-check"></i>';
+                } else if(type === 'api-error') { 
+                    el.classList.add('bg-red-500/20', 'text-red-300', 'border', 'border-red-500/30'); 
+                    iconHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+                } else if (type === 'api-loading') {
+                    el.classList.add('bg-white/10', 'text-white', 'border', 'border-white/20'); 
+                    iconHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+                }
+
+                if(icon) iconHTML = icon; // override icon if provided
+                el.innerHTML = `${iconHTML} <span>${msg}</span>`;
+                el.classList.remove('hidden');
+                
+                // Animasi masuk
+                el.style.animation = 'none';
+                el.offsetHeight; /* trigger reflow */
+                el.style.animation = 'fadeIn 0.3s ease-out';
+                
+                // Auto hide jika bukan loading
+                if(!type.includes('loading')) {
+                    setTimeout(() => { 
+                        el.style.opacity = '0';
+                        setTimeout(() => { el.classList.add('hidden'); el.style.opacity = '1'; }, 300);
+                    }, 5000);
+                }
+            }
+
+            // --- Handler 1: Tarik dari API Apify ---
+            document.getElementById('btn-fetch-apify').addEventListener('click', async () => {
+                const inputId = document.getElementById('apify-dataset-id').value.trim();
+                const btn = document.getElementById('btn-fetch-apify');
+
+                if (!inputId) {
+                    showStatus('apify-status', 'Dataset ID tidak boleh kosong!', 'api-error');
+                    // Guncangkan input field (efek error)
+                    const inputEl = document.getElementById('apify-dataset-id');
+                    inputEl.classList.add('animate-[pulse_0.2s_ease-in-out_3]');
+                    setTimeout(() => inputEl.classList.remove('animate-[pulse_0.2s_ease-in-out_3]'), 600);
+                    return;
+                }
+                
+                // Ubah state tombol menjadi loading
+                const originalContent = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Mengambil...';
+                btn.classList.add('opacity-70', 'cursor-not-allowed', 'pointer-events-none');
+                showStatus('apify-status', 'Menghubungkan ke server Apify...', 'api-loading');
+
+                try {
+                    // Fetch ke endpoint dataset item Apify
+                    const res = await fetch(`https://api.apify.com/v2/datasets/${inputId}/items`);
+                    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+                    
+                    const data = await res.json();
+                    
+                    if (data && data.length) {
+                        renderDashboard(data);
+                        showStatus('apify-status', `Berhasil! ${data.length} baris data berhasil ditarik.`, 'api-success');
+                        
+                        // Scroll otomatis ke atas (ke bagian chart) agar user melihat perubahan
+                        window.scrollTo({ top: document.getElementById('dashboard').offsetTop - 20, behavior: 'smooth' });
+                    } else {
+                        showStatus('apify-status', 'Dataset kosong atau format salah.', 'api-error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showStatus('apify-status', `Gagal: Akses ditolak, ID salah, atau dataset tidak diset Public.`, 'api-error');
+                } finally {
+                    // Kembalikan state tombol
+                    btn.innerHTML = originalContent;
+                    btn.classList.remove('opacity-70', 'cursor-not-allowed', 'pointer-events-none');
+                }
+            });
+
+            // --- Handler 2: Upload File Lokal (.html / .json) ---
+            document.getElementById('file-upload').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                showStatus('upload-status', 'Membaca file...', 'loading');
+
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const content = ev.target.result;
+                    try {
+                        let data = [];
+                        
+                        // Deteksi ekstensi file
+                        if (file.name.toLowerCase().endsWith('.json')) {
+                            data = JSON.parse(content);
+                            if(!Array.isArray(data)) throw new Error("Format JSON tidak valid (harus berupa Array).");
+                        } else if (file.name.toLowerCase().endsWith('.html')) {
+                            data = parseHTMLData(content);
+                            if(!data.length) throw new Error("Tidak menemukan tabel data di dalam file HTML.");
+                        } else {
+                            throw new Error("Tipe file tidak didukung. Gunakan .json atau .html");
+                        }
+                        
+                        // Render UI
+                        renderDashboard(data);
+                        showStatus('upload-status', `Upload Berhasil! ${data.length} baris data dianalisis.`, 'success');
+                        
+                        // Auto scroll ke atas
+                        window.scrollTo({ top: document.getElementById('dashboard').offsetTop - 20, behavior: 'smooth' });
+                        
+                    } catch (err) {
+                        showStatus('upload-status', err.message, 'error');
+                    }
+                };
+                
+                reader.onerror = () => showStatus('upload-status', 'Gagal membaca file dari sistem Anda.', 'error');
+                
+                // Baca file sebagai teks
+                reader.readAsText(file);
+                
+                // Reset value input agar jika user mengunggah file yang sama, event change tetap tertrigger
+                e.target.value = '';
+            });
+
+            // Jalankan render inisial dengan data mock saat pertama kali halaman dimuat
+            renderDashboard(initialMockData);
+        });
+    </script>
+</body>
+</html>
